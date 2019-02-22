@@ -4,12 +4,15 @@
   * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
   */
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('jquery'), require('./util.js')) :
-  typeof define === 'function' && define.amd ? define(['jquery', './util.js'], factory) :
-  (global = global || self, global.Carousel = factory(global.jQuery, global.Util));
-}(this, function ($, Util) { 'use strict';
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('./dom/data.js'), require('./dom/eventHandler.js'), require('./dom/manipulator.js'), require('./dom/selectorEngine.js'), require('./util.js')) :
+  typeof define === 'function' && define.amd ? define(['./dom/data.js', './dom/eventHandler.js', './dom/manipulator.js', './dom/selectorEngine.js', './util.js'], factory) :
+  (global = global || self, global.Carousel = factory(global.Data, global.EventHandler, global.Manipulator, global.SelectorEngine, global.Util));
+}(this, function (Data, EventHandler, Manipulator, SelectorEngine, Util) { 'use strict';
 
-  $ = $ && $.hasOwnProperty('default') ? $['default'] : $;
+  Data = Data && Data.hasOwnProperty('default') ? Data['default'] : Data;
+  EventHandler = EventHandler && EventHandler.hasOwnProperty('default') ? EventHandler['default'] : EventHandler;
+  Manipulator = Manipulator && Manipulator.hasOwnProperty('default') ? Manipulator['default'] : Manipulator;
+  SelectorEngine = SelectorEngine && SelectorEngine.hasOwnProperty('default') ? SelectorEngine['default'] : SelectorEngine;
   Util = Util && Util.hasOwnProperty('default') ? Util['default'] : Util;
 
   function _defineProperties(target, props) {
@@ -73,7 +76,6 @@
   var DATA_KEY = 'bs.carousel';
   var EVENT_KEY = "." + DATA_KEY;
   var DATA_API_KEY = '.data-api';
-  var JQUERY_NO_CONFLICT = $.fn[NAME];
   var ARROW_LEFT_KEYCODE = 37; // KeyboardEvent.which value for left arrow key
 
   var ARROW_RIGHT_KEYCODE = 39; // KeyboardEvent.which value for right arrow key
@@ -164,11 +166,13 @@
       this.touchDeltaX = 0;
       this._config = this._getConfig(config);
       this._element = element;
-      this._indicatorsElement = this._element.querySelector(Selector.INDICATORS);
+      this._indicatorsElement = SelectorEngine.findOne(Selector.INDICATORS, this._element);
       this._touchSupported = 'ontouchstart' in document.documentElement || navigator.maxTouchPoints > 0;
       this._pointerEvent = Boolean(window.PointerEvent || window.MSPointerEvent);
 
       this._addEventListeners();
+
+      Data.setData(element, DATA_KEY, this);
     } // Getters
 
 
@@ -184,7 +188,7 @@
     _proto.nextWhenVisible = function nextWhenVisible() {
       // Don't call next when the page isn't visible
       // or the carousel or its parent isn't visible
-      if (!document.hidden && $(this._element).is(':visible') && $(this._element).css('visibility') !== 'hidden') {
+      if (!document.hidden && Util.isVisible(this._element)) {
         this.next();
       }
     };
@@ -200,7 +204,7 @@
         this._isPaused = true;
       }
 
-      if (this._element.querySelector(Selector.NEXT_PREV)) {
+      if (SelectorEngine.findOne(Selector.NEXT_PREV, this._element)) {
         Util.triggerTransitionEnd(this._element);
         this.cycle(true);
       }
@@ -219,7 +223,7 @@
         this._interval = null;
       }
 
-      if (this._config.interval && !this._isPaused) {
+      if (this._config && this._config.interval && !this._isPaused) {
         this._interval = setInterval((document.visibilityState ? this.nextWhenVisible : this.next).bind(this), this._config.interval);
       }
     };
@@ -227,7 +231,7 @@
     _proto.to = function to(index) {
       var _this = this;
 
-      this._activeElement = this._element.querySelector(Selector.ACTIVE_ITEM);
+      this._activeElement = SelectorEngine.findOne(Selector.ACTIVE_ITEM, this._element);
 
       var activeIndex = this._getItemIndex(this._activeElement);
 
@@ -236,7 +240,7 @@
       }
 
       if (this._isSliding) {
-        $(this._element).one(Event.SLID, function () {
+        EventHandler.one(this._element, Event.SLID, function () {
           return _this.to(index);
         });
         return;
@@ -254,8 +258,8 @@
     };
 
     _proto.dispose = function dispose() {
-      $(this._element).off(EVENT_KEY);
-      $.removeData(this._element, DATA_KEY);
+      EventHandler.off(this._element, EVENT_KEY);
+      Data.removeData(this._element, DATA_KEY);
       this._items = null;
       this._config = null;
       this._element = null;
@@ -296,15 +300,16 @@
       var _this2 = this;
 
       if (this._config.keyboard) {
-        $(this._element).on(Event.KEYDOWN, function (event) {
+        EventHandler.on(this._element, Event.KEYDOWN, function (event) {
           return _this2._keydown(event);
         });
       }
 
       if (this._config.pause === 'hover') {
-        $(this._element).on(Event.MOUSEENTER, function (event) {
+        EventHandler.on(this._element, Event.MOUSEENTER, function (event) {
           return _this2.pause(event);
-        }).on(Event.MOUSELEAVE, function (event) {
+        });
+        EventHandler.on(this._element, Event.MOUSELEAVE, function (event) {
           return _this2.cycle(event);
         });
       }
@@ -322,25 +327,25 @@
       }
 
       var start = function start(event) {
-        if (_this3._pointerEvent && PointerType[event.originalEvent.pointerType.toUpperCase()]) {
-          _this3.touchStartX = event.originalEvent.clientX;
+        if (_this3._pointerEvent && PointerType[event.pointerType.toUpperCase()]) {
+          _this3.touchStartX = event.clientX;
         } else if (!_this3._pointerEvent) {
-          _this3.touchStartX = event.originalEvent.touches[0].clientX;
+          _this3.touchStartX = event.touches[0].clientX;
         }
       };
 
       var move = function move(event) {
         // ensure swiping with one touch and not pinching
-        if (event.originalEvent.touches && event.originalEvent.touches.length > 1) {
+        if (event.touches && event.touches.length > 1) {
           _this3.touchDeltaX = 0;
         } else {
-          _this3.touchDeltaX = event.originalEvent.touches[0].clientX - _this3.touchStartX;
+          _this3.touchDeltaX = event.touches[0].clientX - _this3.touchStartX;
         }
       };
 
       var end = function end(event) {
-        if (_this3._pointerEvent && PointerType[event.originalEvent.pointerType.toUpperCase()]) {
-          _this3.touchDeltaX = event.originalEvent.clientX - _this3.touchStartX;
+        if (_this3._pointerEvent && PointerType[event.pointerType.toUpperCase()]) {
+          _this3.touchDeltaX = event.clientX - _this3.touchStartX;
         }
 
         _this3._handleSwipe();
@@ -365,27 +370,29 @@
         }
       };
 
-      $(this._element.querySelectorAll(Selector.ITEM_IMG)).on(Event.DRAG_START, function (e) {
-        return e.preventDefault();
+      Util.makeArray(SelectorEngine.find(Selector.ITEM_IMG, this._element)).forEach(function (itemImg) {
+        EventHandler.on(itemImg, Event.DRAG_START, function (e) {
+          return e.preventDefault();
+        });
       });
 
       if (this._pointerEvent) {
-        $(this._element).on(Event.POINTERDOWN, function (event) {
+        EventHandler.on(this._element, Event.POINTERDOWN, function (event) {
           return start(event);
         });
-        $(this._element).on(Event.POINTERUP, function (event) {
+        EventHandler.on(this._element, Event.POINTERUP, function (event) {
           return end(event);
         });
 
         this._element.classList.add(ClassName.POINTER_EVENT);
       } else {
-        $(this._element).on(Event.TOUCHSTART, function (event) {
+        EventHandler.on(this._element, Event.TOUCHSTART, function (event) {
           return start(event);
         });
-        $(this._element).on(Event.TOUCHMOVE, function (event) {
+        EventHandler.on(this._element, Event.TOUCHMOVE, function (event) {
           return move(event);
         });
-        $(this._element).on(Event.TOUCHEND, function (event) {
+        EventHandler.on(this._element, Event.TOUCHEND, function (event) {
           return end(event);
         });
       }
@@ -412,7 +419,7 @@
     };
 
     _proto._getItemIndex = function _getItemIndex(element) {
-      this._items = element && element.parentNode ? [].slice.call(element.parentNode.querySelectorAll(Selector.ITEM)) : [];
+      this._items = element && element.parentNode ? Util.makeArray(SelectorEngine.find(Selector.ITEM, element.parentNode)) : [];
       return this._items.indexOf(element);
     };
 
@@ -437,27 +444,28 @@
     _proto._triggerSlideEvent = function _triggerSlideEvent(relatedTarget, eventDirectionName) {
       var targetIndex = this._getItemIndex(relatedTarget);
 
-      var fromIndex = this._getItemIndex(this._element.querySelector(Selector.ACTIVE_ITEM));
+      var fromIndex = this._getItemIndex(SelectorEngine.findOne(Selector.ACTIVE_ITEM, this._element));
 
-      var slideEvent = $.Event(Event.SLIDE, {
+      return EventHandler.trigger(this._element, Event.SLIDE, {
         relatedTarget: relatedTarget,
         direction: eventDirectionName,
         from: fromIndex,
         to: targetIndex
       });
-      $(this._element).trigger(slideEvent);
-      return slideEvent;
     };
 
     _proto._setActiveIndicatorElement = function _setActiveIndicatorElement(element) {
       if (this._indicatorsElement) {
-        var indicators = [].slice.call(this._indicatorsElement.querySelectorAll(Selector.ACTIVE));
-        $(indicators).removeClass(ClassName.ACTIVE);
+        var indicators = SelectorEngine.find(Selector.ACTIVE, this._indicatorsElement);
+
+        for (var i = 0; i < indicators.length; i++) {
+          indicators[i].classList.remove(ClassName.ACTIVE);
+        }
 
         var nextIndicator = this._indicatorsElement.children[this._getItemIndex(element)];
 
         if (nextIndicator) {
-          $(nextIndicator).addClass(ClassName.ACTIVE);
+          nextIndicator.classList.add(ClassName.ACTIVE);
         }
       }
     };
@@ -465,7 +473,7 @@
     _proto._slide = function _slide(direction, element) {
       var _this4 = this;
 
-      var activeElement = this._element.querySelector(Selector.ACTIVE_ITEM);
+      var activeElement = SelectorEngine.findOne(Selector.ACTIVE_ITEM, this._element);
 
       var activeElementIndex = this._getItemIndex(activeElement);
 
@@ -488,14 +496,14 @@
         eventDirectionName = Direction.RIGHT;
       }
 
-      if (nextElement && $(nextElement).hasClass(ClassName.ACTIVE)) {
+      if (nextElement && nextElement.classList.contains(ClassName.ACTIVE)) {
         this._isSliding = false;
         return;
       }
 
       var slideEvent = this._triggerSlideEvent(nextElement, eventDirectionName);
 
-      if (slideEvent.isDefaultPrevented()) {
+      if (slideEvent.defaultPrevented) {
         return;
       }
 
@@ -512,18 +520,11 @@
 
       this._setActiveIndicatorElement(nextElement);
 
-      var slidEvent = $.Event(Event.SLID, {
-        relatedTarget: nextElement,
-        direction: eventDirectionName,
-        from: activeElementIndex,
-        to: nextElementIndex
-      });
-
-      if ($(this._element).hasClass(ClassName.SLIDE)) {
-        $(nextElement).addClass(orderClassName);
+      if (this._element.classList.contains(ClassName.SLIDE)) {
+        nextElement.classList.add(orderClassName);
         Util.reflow(nextElement);
-        $(activeElement).addClass(directionalClassName);
-        $(nextElement).addClass(directionalClassName);
+        activeElement.classList.add(directionalClassName);
+        nextElement.classList.add(directionalClassName);
         var nextElementInterval = parseInt(nextElement.getAttribute('data-interval'), 10);
 
         if (nextElementInterval) {
@@ -534,19 +535,34 @@
         }
 
         var transitionDuration = Util.getTransitionDurationFromElement(activeElement);
-        $(activeElement).one(Util.TRANSITION_END, function () {
-          $(nextElement).removeClass(directionalClassName + " " + orderClassName).addClass(ClassName.ACTIVE);
-          $(activeElement).removeClass(ClassName.ACTIVE + " " + orderClassName + " " + directionalClassName);
+        EventHandler.one(activeElement, Util.TRANSITION_END, function () {
+          nextElement.classList.remove(directionalClassName);
+          nextElement.classList.remove(orderClassName);
+          nextElement.classList.add(ClassName.ACTIVE);
+          activeElement.classList.remove(ClassName.ACTIVE);
+          activeElement.classList.remove(orderClassName);
+          activeElement.classList.remove(directionalClassName);
           _this4._isSliding = false;
           setTimeout(function () {
-            return $(_this4._element).trigger(slidEvent);
+            EventHandler.trigger(_this4._element, Event.SLID, {
+              relatedTarget: nextElement,
+              direction: eventDirectionName,
+              from: activeElementIndex,
+              to: nextElementIndex
+            });
           }, 0);
-        }).emulateTransitionEnd(transitionDuration);
+        });
+        Util.emulateTransitionEnd(activeElement, transitionDuration);
       } else {
-        $(activeElement).removeClass(ClassName.ACTIVE);
-        $(nextElement).addClass(ClassName.ACTIVE);
+        activeElement.classList.remove(ClassName.ACTIVE);
+        nextElement.classList.add(ClassName.ACTIVE);
         this._isSliding = false;
-        $(this._element).trigger(slidEvent);
+        EventHandler.trigger(this._element, Event.SLID, {
+          relatedTarget: nextElement,
+          direction: eventDirectionName,
+          from: activeElementIndex,
+          to: nextElementIndex
+        });
       }
 
       if (isCycling) {
@@ -555,35 +571,38 @@
     } // Static
     ;
 
+    Carousel._carouselInterface = function _carouselInterface(element, config) {
+      var data = Data.getData(element, DATA_KEY);
+
+      var _config = _objectSpread({}, Default, Manipulator.getDataAttributes(element));
+
+      if (typeof config === 'object') {
+        _config = _objectSpread({}, _config, config);
+      }
+
+      var action = typeof config === 'string' ? config : _config.slide;
+
+      if (!data) {
+        data = new Carousel(element, _config);
+      }
+
+      if (typeof config === 'number') {
+        data.to(config);
+      } else if (typeof action === 'string') {
+        if (typeof data[action] === 'undefined') {
+          throw new Error("No method named \"" + action + "\"");
+        }
+
+        data[action]();
+      } else if (_config.interval && _config.ride) {
+        data.pause();
+        data.cycle();
+      }
+    };
+
     Carousel._jQueryInterface = function _jQueryInterface(config) {
       return this.each(function () {
-        var data = $(this).data(DATA_KEY);
-
-        var _config = _objectSpread({}, Default, $(this).data());
-
-        if (typeof config === 'object') {
-          _config = _objectSpread({}, _config, config);
-        }
-
-        var action = typeof config === 'string' ? config : _config.slide;
-
-        if (!data) {
-          data = new Carousel(this, _config);
-          $(this).data(DATA_KEY, data);
-        }
-
-        if (typeof config === 'number') {
-          data.to(config);
-        } else if (typeof action === 'string') {
-          if (typeof data[action] === 'undefined') {
-            throw new TypeError("No method named \"" + action + "\"");
-          }
-
-          data[action]();
-        } else if (_config.interval && _config.ride) {
-          data.pause();
-          data.cycle();
-        }
+        Carousel._carouselInterface(this, config);
       });
     };
 
@@ -594,13 +613,13 @@
         return;
       }
 
-      var target = $(selector)[0];
+      var target = SelectorEngine.findOne(selector);
 
-      if (!target || !$(target).hasClass(ClassName.CAROUSEL)) {
+      if (!target || !target.classList.contains(ClassName.CAROUSEL)) {
         return;
       }
 
-      var config = _objectSpread({}, $(target).data(), $(this).data());
+      var config = _objectSpread({}, Manipulator.getDataAttributes(target), Manipulator.getDataAttributes(this));
 
       var slideIndex = this.getAttribute('data-slide-to');
 
@@ -608,13 +627,17 @@
         config.interval = false;
       }
 
-      Carousel._jQueryInterface.call($(target), config);
+      Carousel._carouselInterface(target, config);
 
       if (slideIndex) {
-        $(target).data(DATA_KEY).to(slideIndex);
+        Data.getData(target, DATA_KEY).to(slideIndex);
       }
 
       event.preventDefault();
+    };
+
+    Carousel._getInstance = function _getInstance(element) {
+      return Data.getData(element, DATA_KEY);
     };
 
     _createClass(Carousel, null, [{
@@ -638,29 +661,33 @@
    */
 
 
-  $(document).on(Event.CLICK_DATA_API, Selector.DATA_SLIDE, Carousel._dataApiClickHandler);
-  $(window).on(Event.LOAD_DATA_API, function () {
-    var carousels = [].slice.call(document.querySelectorAll(Selector.DATA_RIDE));
+  EventHandler.on(document, Event.CLICK_DATA_API, Selector.DATA_SLIDE, Carousel._dataApiClickHandler);
+  EventHandler.on(window, Event.LOAD_DATA_API, function () {
+    var carousels = Util.makeArray(SelectorEngine.find(Selector.DATA_RIDE));
 
     for (var i = 0, len = carousels.length; i < len; i++) {
-      var $carousel = $(carousels[i]);
-
-      Carousel._jQueryInterface.call($carousel, $carousel.data());
+      Carousel._carouselInterface(carousels[i], Data.getData(carousels[i], DATA_KEY));
     }
   });
   /**
    * ------------------------------------------------------------------------
    * jQuery
    * ------------------------------------------------------------------------
+   * add .carousel to jQuery only if jQuery is present
    */
 
-  $.fn[NAME] = Carousel._jQueryInterface;
-  $.fn[NAME].Constructor = Carousel;
+  var $ = Util.jQuery;
 
-  $.fn[NAME].noConflict = function () {
-    $.fn[NAME] = JQUERY_NO_CONFLICT;
-    return Carousel._jQueryInterface;
-  };
+  if (typeof $ !== 'undefined') {
+    var JQUERY_NO_CONFLICT = $.fn[NAME];
+    $.fn[NAME] = Carousel._jQueryInterface;
+    $.fn[NAME].Constructor = Carousel;
+
+    $.fn[NAME].noConflict = function () {
+      $.fn[NAME] = JQUERY_NO_CONFLICT;
+      return Carousel._jQueryInterface;
+    };
+  }
 
   return Carousel;
 

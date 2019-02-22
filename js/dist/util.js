@@ -4,12 +4,10 @@
   * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
   */
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('jquery')) :
-  typeof define === 'function' && define.amd ? define(['jquery'], factory) :
-  (global = global || self, global.Util = factory(global.jQuery));
-}(this, function ($) { 'use strict';
-
-  $ = $ && $.hasOwnProperty('default') ? $['default'] : $;
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory() :
+  typeof define === 'function' && define.amd ? define(factory) :
+  (global = global || self, global.Util = factory());
+}(this, function () { 'use strict';
 
   /**
    * --------------------------------------------------------------------------
@@ -17,52 +15,17 @@
    * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
    * --------------------------------------------------------------------------
    */
+
   /**
    * ------------------------------------------------------------------------
    * Private TransitionEnd Helpers
    * ------------------------------------------------------------------------
    */
-
-  var TRANSITION_END = 'transitionend';
   var MAX_UID = 1000000;
   var MILLISECONDS_MULTIPLIER = 1000; // Shoutout AngusCroll (https://goo.gl/pxwQGp)
 
   function toType(obj) {
     return {}.toString.call(obj).match(/\s([a-z]+)/i)[1].toLowerCase();
-  }
-
-  function getSpecialTransitionEndEvent() {
-    return {
-      bindType: TRANSITION_END,
-      delegateType: TRANSITION_END,
-      handle: function handle(event) {
-        if ($(event.target).is(this)) {
-          return event.handleObj.handler.apply(this, arguments); // eslint-disable-line prefer-rest-params
-        }
-
-        return undefined; // eslint-disable-line no-undefined
-      }
-    };
-  }
-
-  function transitionEndEmulator(duration) {
-    var _this = this;
-
-    var called = false;
-    $(this).one(Util.TRANSITION_END, function () {
-      called = true;
-    });
-    setTimeout(function () {
-      if (!called) {
-        Util.triggerTransitionEnd(_this);
-      }
-    }, duration);
-    return this;
-  }
-
-  function setTransitionEndSupport() {
-    $.fn.emulateTransitionEnd = transitionEndEmulator;
-    $.event.special[Util.TRANSITION_END] = getSpecialTransitionEndEvent();
   }
   /**
    * --------------------------------------------------------------------------
@@ -72,7 +35,7 @@
 
 
   var Util = {
-    TRANSITION_END: 'bsTransitionEnd',
+    TRANSITION_END: 'transitionend',
     getUID: function getUID(prefix) {
       do {
         // eslint-disable-next-line no-bitwise
@@ -101,8 +64,8 @@
       } // Get transition-duration of the element
 
 
-      var transitionDuration = $(element).css('transition-duration');
-      var transitionDelay = $(element).css('transition-delay');
+      var transitionDuration = window.getComputedStyle(element).transitionDuration;
+      var transitionDelay = window.getComputedStyle(element).transitionDelay;
       var floatTransitionDuration = parseFloat(transitionDuration);
       var floatTransitionDelay = parseFloat(transitionDelay); // Return 0 if element or transition duration is not found
 
@@ -119,14 +82,27 @@
       return element.offsetHeight;
     },
     triggerTransitionEnd: function triggerTransitionEnd(element) {
-      $(element).trigger(TRANSITION_END);
-    },
-    // TODO: Remove in v5
-    supportsTransitionEnd: function supportsTransitionEnd() {
-      return Boolean(TRANSITION_END);
+      element.dispatchEvent(new Event(Util.TRANSITION_END));
     },
     isElement: function isElement(obj) {
       return (obj[0] || obj).nodeType;
+    },
+    emulateTransitionEnd: function emulateTransitionEnd(element, duration) {
+      var called = false;
+      var durationPadding = 5;
+      var emulatedDuration = duration + durationPadding;
+
+      function listener() {
+        called = true;
+        element.removeEventListener(Util.TRANSITION_END, listener);
+      }
+
+      element.addEventListener(Util.TRANSITION_END, listener);
+      setTimeout(function () {
+        if (!called) {
+          Util.triggerTransitionEnd(element);
+        }
+      }, emulatedDuration);
     },
     typeCheckConfig: function typeCheckConfig(componentName, config, configTypes) {
       for (var property in configTypes) {
@@ -140,6 +116,24 @@
           }
         }
       }
+    },
+    makeArray: function makeArray(nodeList) {
+      if (!nodeList) {
+        return [];
+      }
+
+      return [].slice.call(nodeList);
+    },
+    isVisible: function isVisible(element) {
+      if (!element) {
+        return false;
+      }
+
+      if (element.style !== null && element.parentNode !== null && typeof element.parentNode.style !== 'undefined') {
+        return element.style.display !== 'none' && element.parentNode.style.display !== 'none' && element.style.visibility !== 'hidden';
+      }
+
+      return false;
     },
     findShadowRoot: function findShadowRoot(element) {
       if (!document.documentElement.attachShadow) {
@@ -162,9 +156,17 @@
       }
 
       return Util.findShadowRoot(element.parentNode);
+    },
+    noop: function noop() {
+      // eslint-disable-next-line no-empty-function
+      return function () {};
+    },
+
+    get jQuery() {
+      return window.jQuery;
     }
+
   };
-  setTransitionEndSupport();
 
   return Util;
 

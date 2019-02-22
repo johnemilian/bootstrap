@@ -4,12 +4,14 @@
   * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
   */
 (function (global, factory) {
-  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('jquery'), require('./util.js')) :
-  typeof define === 'function' && define.amd ? define(['jquery', './util.js'], factory) :
-  (global = global || self, global.Toast = factory(global.jQuery, global.Util));
-}(this, function ($, Util) { 'use strict';
+  typeof exports === 'object' && typeof module !== 'undefined' ? module.exports = factory(require('./dom/data.js'), require('./dom/eventHandler.js'), require('./dom/manipulator.js'), require('./util.js')) :
+  typeof define === 'function' && define.amd ? define(['./dom/data.js', './dom/eventHandler.js', './dom/manipulator.js', './util.js'], factory) :
+  (global = global || self, global.Toast = factory(global.Data, global.EventHandler, global.Manipulator, global.Util));
+}(this, function (Data, EventHandler, Manipulator, Util) { 'use strict';
 
-  $ = $ && $.hasOwnProperty('default') ? $['default'] : $;
+  Data = Data && Data.hasOwnProperty('default') ? Data['default'] : Data;
+  EventHandler = EventHandler && EventHandler.hasOwnProperty('default') ? EventHandler['default'] : EventHandler;
+  Manipulator = Manipulator && Manipulator.hasOwnProperty('default') ? Manipulator['default'] : Manipulator;
   Util = Util && Util.hasOwnProperty('default') ? Util['default'] : Util;
 
   function _defineProperties(target, props) {
@@ -72,7 +74,6 @@
   var VERSION = '4.3.1';
   var DATA_KEY = 'bs.toast';
   var EVENT_KEY = "." + DATA_KEY;
-  var JQUERY_NO_CONFLICT = $.fn[NAME];
   var Event = {
     CLICK_DISMISS: "click.dismiss" + EVENT_KEY,
     HIDE: "hide" + EVENT_KEY,
@@ -115,6 +116,8 @@
       this._timeout = null;
 
       this._setListeners();
+
+      Data.setData(element, DATA_KEY, this);
     } // Getters
 
 
@@ -124,7 +127,7 @@
     _proto.show = function show() {
       var _this = this;
 
-      $(this._element).trigger(Event.SHOW);
+      EventHandler.trigger(this._element, Event.SHOW);
 
       if (this._config.animation) {
         this._element.classList.add(ClassName.FADE);
@@ -135,7 +138,7 @@
 
         _this._element.classList.add(ClassName.SHOW);
 
-        $(_this._element).trigger(Event.SHOWN);
+        EventHandler.trigger(_this._element, Event.SHOWN);
 
         if (_this._config.autohide) {
           _this.hide();
@@ -148,7 +151,8 @@
 
       if (this._config.animation) {
         var transitionDuration = Util.getTransitionDurationFromElement(this._element);
-        $(this._element).one(Util.TRANSITION_END, complete).emulateTransitionEnd(transitionDuration);
+        EventHandler.one(this._element, Util.TRANSITION_END, complete);
+        Util.emulateTransitionEnd(this._element, transitionDuration);
       } else {
         complete();
       }
@@ -161,7 +165,7 @@
         return;
       }
 
-      $(this._element).trigger(Event.HIDE);
+      EventHandler.trigger(this._element, Event.HIDE);
 
       if (withoutTimeout) {
         this._close();
@@ -180,15 +184,15 @@
         this._element.classList.remove(ClassName.SHOW);
       }
 
-      $(this._element).off(Event.CLICK_DISMISS);
-      $.removeData(this._element, DATA_KEY);
+      EventHandler.off(this._element, Event.CLICK_DISMISS);
+      Data.removeData(this._element, DATA_KEY);
       this._element = null;
       this._config = null;
     } // Private
     ;
 
     _proto._getConfig = function _getConfig(config) {
-      config = _objectSpread({}, Default, $(this._element).data(), typeof config === 'object' && config ? config : {});
+      config = _objectSpread({}, Default, Manipulator.getDataAttributes(this._element), typeof config === 'object' && config ? config : {});
       Util.typeCheckConfig(NAME, config, this.constructor.DefaultType);
       return config;
     };
@@ -196,7 +200,7 @@
     _proto._setListeners = function _setListeners() {
       var _this3 = this;
 
-      $(this._element).on(Event.CLICK_DISMISS, Selector.DATA_DISMISS, function () {
+      EventHandler.on(this._element, Event.CLICK_DISMISS, Selector.DATA_DISMISS, function () {
         return _this3.hide(true);
       });
     };
@@ -207,14 +211,15 @@
       var complete = function complete() {
         _this4._element.classList.add(ClassName.HIDE);
 
-        $(_this4._element).trigger(Event.HIDDEN);
+        EventHandler.trigger(_this4._element, Event.HIDDEN);
       };
 
       this._element.classList.remove(ClassName.SHOW);
 
       if (this._config.animation) {
         var transitionDuration = Util.getTransitionDurationFromElement(this._element);
-        $(this._element).one(Util.TRANSITION_END, complete).emulateTransitionEnd(transitionDuration);
+        EventHandler.one(this._element, Util.TRANSITION_END, complete);
+        Util.emulateTransitionEnd(this._element, transitionDuration);
       } else {
         complete();
       }
@@ -223,14 +228,12 @@
 
     Toast._jQueryInterface = function _jQueryInterface(config) {
       return this.each(function () {
-        var $element = $(this);
-        var data = $element.data(DATA_KEY);
+        var data = Data.getData(this, DATA_KEY);
 
         var _config = typeof config === 'object' && config;
 
         if (!data) {
           data = new Toast(this, _config);
-          $element.data(DATA_KEY, data);
         }
 
         if (typeof config === 'string') {
@@ -241,6 +244,10 @@
           data[config](this);
         }
       });
+    };
+
+    Toast._getInstance = function _getInstance(element) {
+      return Data.getData(element, DATA_KEY);
     };
 
     _createClass(Toast, null, [{
@@ -266,16 +273,22 @@
    * ------------------------------------------------------------------------
    * jQuery
    * ------------------------------------------------------------------------
+   *  add .toast to jQuery only if jQuery is present
    */
 
 
-  $.fn[NAME] = Toast._jQueryInterface;
-  $.fn[NAME].Constructor = Toast;
+  var $ = Util.jQuery;
 
-  $.fn[NAME].noConflict = function () {
-    $.fn[NAME] = JQUERY_NO_CONFLICT;
-    return Toast._jQueryInterface;
-  };
+  if (typeof $ !== 'undefined') {
+    var JQUERY_NO_CONFLICT = $.fn[NAME];
+    $.fn[NAME] = Toast._jQueryInterface;
+    $.fn[NAME].Constructor = Toast;
+
+    $.fn[NAME].noConflict = function () {
+      $.fn[NAME] = JQUERY_NO_CONFLICT;
+      return Toast._jQueryInterface;
+    };
+  }
 
   return Toast;
 
